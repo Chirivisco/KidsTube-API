@@ -12,4 +12,4 @@ const userSchema = new Schema({
   birthdate: { type: Date, required: true },
 }, { timestamps: true }); // timestamps agrega cuando se creó y/o actualizó el usuario
 
-export default mongoose.model("User", userSchema, "users");
+export default mongoose.model("User", userSchema, "Usuarios");
