@@ -1,4 +1,7 @@
 import User from "../models/userModel.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import 'dotenv/config';
 
 /**
  * Creates a user
@@ -6,51 +9,60 @@ import User from "../models/userModel.js";
  * @param {*} req
  * @param {*} res
  */
-const userCreate = (req, res) => {
-    let user = new User();
+const userCreate = async (req, res) => {
+    //console.log("Datos recibidos en el bckend:", req.body);
+    try {
+        const hashedPassword = await bcrypt.hash(req.body.password, 10);
 
-    user.email = req.body.email;
-    user.password = req.body.password;
-    user.phone = req.body.phone;
-    user.pin = req.body.pin;
-    user.name = req.body.name;
-    user.country = req.body.country;
-    user.birthdate = req.body.birthdate;
+        let user = new User();
 
-    // comprueba la mayoría de edad dl usuario
-    const birthDate = new Date(user.birthdate);
-    const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
+        user.email = req.body.email;
+        user.password = hashedPassword;
+        user.phone = req.body.phone;
+        user.pin = req.body.pin;
+        user.name = req.body.name;
+        user.country = req.body.country;
+        user.birthdate = req.body.birthdate;
 
-    if (age < 18) {
-        return res.status(400).json({ error: "User must be at least 18 years old" });
-    }
+        // comprueba la mayoría de edad dl usuario
+        const birthDate = new Date(user.birthdate);
+        const today = new Date();
+        const age = today.getFullYear() - birthDate.getFullYear();
 
-    // comprueba que exista un email y contrasena
-    if (user.email && user.password) {
-        // guarda el usuario
-        user.save()
-            .then(() => {
-                res.status(201);
-                res.header({
-                    'location': `/users/?id=${user.id}`
+        if (age < 18) {
+            return res.status(400).json({ error: "User must be at least 18 years old" });
+        }
+
+        // comprueba que exista un email y contrasena
+        if (user.email && user.password) {
+            // guarda el usuario
+
+            await user.save();
+            res.status(201).json(user);
+
+            await user.save()
+                .then(() => {
+                    res.status(201);
+                    res.header({
+                        'location': `/users/?id=${user.id}`
+                    });
+                    res.json(user);
                 });
-                res.json(user);
-            })
-            .catch((err) => {
-                res.status(422);
-                console.log('Error while saving the user', err);
-                res.json({
-                    error: 'There was an error saving the user'
-                });
+        } else {
+            res.status(422);
+            console.log('Error while saving the user');
+            res.json({
+                error: 'No valid data provided for user'
             });
-    } else {
+        }
+    } catch (e) {
         res.status(422);
-        console.log('Error while saving the user');
+        console.log('Error while saving the user', e);
         res.json({
-            error: 'No valid data provided for user'
+            error: 'There was an error saving the user'
         });
     }
+
 };
 
 /**
@@ -70,7 +82,7 @@ const userGet = (req, res) => {
                 }
             })
             .catch((err) => {
-                res.status(500);
+                res.status(500); // no pudo procesar la solicitud
                 console.log('Error while querying the user', err);
                 res.json({ error: "There was an error" });
             });
@@ -80,7 +92,7 @@ const userGet = (req, res) => {
                 res.json(users);
             })
             .catch(err => {
-                res.status(422).json({ error: err });
+                res.status(422).json({ error: err }); // problema en los datos
             });
     }
 };
@@ -133,4 +145,42 @@ const userDelete = (req, res) => {
         });
 };
 
-export { userCreate, userGet, userUpdate, userDelete };
+const userLogin = async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        // valida existencia del email.
+        const emailExists = await User.findOne({ email });
+        if (!emailExists) {
+            return res.status(401).json({ error: "User not found" });
+        }
+
+        // valida la contraseña.
+        const passwordExists = await bcrypt.compare(password, emailExists.password);
+        if (!passwordExists) {
+            return res.status(401).json({ error: "Incorrect password" });
+        }
+
+        // token jwt
+        const token = jwt.sign(
+            {
+                id: emailExists._id,
+                email: emailExists.email
+            },
+            process.env.JWT_SECRET, //llave secreta 
+            {
+                expiresIn: Date.now() + 60 * 1000 //expira en 1 minuto
+            });
+
+        res.json({
+            message: "Loged in",
+            token,
+            user: { id: emailExists._id, name: emailExists.name, email: emailExists.email },
+        });
+
+
+    } catch (e) {
+        res.status(422).json({"error":e.message});
+    }
+}
+
+export { userCreate, userGet, userUpdate, userDelete, userLogin };
