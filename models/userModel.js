@@ -8,8 +8,8 @@ const userSchema = new Schema({
   phone: { type: String, required: true },
   pin: { type: String, required: true, minlength: 6, maxlength: 6 },
   name: { type: String, required: true },
-  country: { type: String, required: true },
   birthdate: { type: Date, required: true },
-}, { timestamps: true }); // timestamps agrega cuando se creó y/o actualizó el usuario
+  profiles: [{ type: mongoose.Schema.Types.ObjectId, ref: "Profile" }], // Nueva referencia a perfiles
+}, { timestamps: true });
 
 export default mongoose.model("User", userSchema, "Usuarios");
