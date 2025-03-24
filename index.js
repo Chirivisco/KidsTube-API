@@ -3,9 +3,11 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import dbConfig from "./config/dbConfig.js";
 import userRoutes from "./routes/userRoutes.js";
-import profileRoutes from "./routes/profileRoutes.js"; // Importar las rutas de perfiles
+import profileRoutes from "./routes/profileRoutes.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
+import playlistRoutes from './routes/playlistRoutes.js';
+import videoRoutes from './routes/videoRoutes.js';
 
 // Definir __dirname manualmente
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +20,9 @@ app.use(cors({ domains: "*", methods: "*" }));
 
 // Rutas
 app.use("/users", userRoutes);
-app.use("/profiles", profileRoutes); // Agregar las rutas de perfiles
+app.use("/profiles", profileRoutes);
+app.use('/api', playlistRoutes);
+app.use('/api', videoRoutes);
 
 // Middleware para servir archivos estáticos
 app.use('/Images', express.static(path.join(__dirname, 'Images')));

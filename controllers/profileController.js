@@ -1,5 +1,18 @@
 import Profile from "../models/profileModel.js";
 import User from "../models/userModel.js";
+import multer from "multer";
+import path from "path";
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "images/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+export const upload = multer({ storage: storage });
 
 /**
  * Crea un nuevo perfil
@@ -8,7 +21,7 @@ import User from "../models/userModel.js";
  * @param {*} res - La respuesta HTTP
  */
 export const createProfile = async (req, res) => {
-  const { fullName, pin, avatar, userId } = req.body;
+  const { fullName, pin, userId, avatar } = req.body;
 
   try {
     const user = await User.findById(userId);
@@ -16,10 +29,18 @@ export const createProfile = async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
+    let avatarPath = avatar;
+
+    if (req.file) {
+      avatarPath = `/Images/${req.file.filename}`;
+    } else if (!avatar || (!req.file && !avatar.startsWith("http"))) {
+      return res.status(400).json({ error: "Debes proporcionar un avatar válido." });
+    }
+
     const profile = new Profile({
       fullName,
       pin,
-      avatar,
+      avatar: avatarPath,
       user: userId,
       role: user.profiles.length === 0 ? "main" : "restricted",
     });
@@ -59,9 +80,15 @@ export const updateProfile = async (req, res) => {
   const { fullName, pin, avatar } = req.body;
 
   try {
+    let avatarPath = avatar;
+
+    if (req.file) {
+      avatarPath = `/Images/${req.file.filename}`;
+    }
+
     const profile = await Profile.findByIdAndUpdate(
       req.params.profileId,
-      { fullName, pin, avatar },
+      { fullName, pin, avatar: avatarPath },
       { new: true }
     );
 
@@ -73,7 +100,7 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Error al actualizar el perfil" });
   }
-};
+}
 
 /**
  * Elimina un perfil por ID

@@ -5,13 +5,15 @@ import {
   updateProfile,
   deleteProfile,
   getProfileById,
+  upload,
 } from "../controllers/profileController.js";
 
 const router = express.Router();
 
-router.post("/", createProfile); // crear un perfil
-router.get("/user/:userId", getProfiles);  // obtener todos los perfiles de un usuario
-router.get("/:profileId", getProfileById); // obtener un perfil específico
-router.put("/:profileId", updateProfile); // actualizar un perfil
-router.delete("/:profileId", deleteProfile); // eliminar un perfil
+router.post("/", upload.single("avatar"), createProfile);
+router.get("/user/:userId", getProfiles);
+router.get("/:profileId", getProfileById);
+router.patch("/:profileId", upload.single("avatar"), updateProfile);
+router.delete("/:profileId", deleteProfile);
+
 export default router;
