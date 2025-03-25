@@ -97,3 +97,20 @@ export const getPlaylistById = async (req, res) => {
         res.status(500).json({ error: 'Error al obtener la playlist' });
     }
 };
+
+export const getPlaylistsByUser = async (req, res) => {
+    try {
+        // Obtener todos los perfiles del usuario
+        const profiles = await Profile.find({ user: req.params.userId }).select('_id');
+
+        // Extraer los IDs de los perfiles
+        const profileIds = profiles.map(profile => profile._id);
+
+        // Buscar playlists que contengan al menos uno de los perfiles del usuario
+        const playlists = await Playlist.find({ profiles: { $in: profileIds } });
+
+        res.status(200).json(playlists);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener las playlists del usuario' });
+    }
+};
