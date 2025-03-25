@@ -14,6 +14,9 @@ import {
 // Importa el middleware de autenticación para proteger las rutas
 import authMiddleware from "../middlewares/authMiddleware.js";
 
+// Importa el middleware de roles para verificar permisos
+import roleMiddleware from "../middlewares/roleMiddleware.js";
+
 // Crea un router de Express
 const router = express.Router();
 
@@ -24,27 +27,27 @@ const router = express.Router();
 
 // Ruta para crear una nueva playlist
 // POST /playlists
-router.post("/playlists", authMiddleware, createPlaylist);
+router.post("/playlists", authMiddleware, roleMiddleware(["main"]), createPlaylist);
 
 // Ruta para obtener todas las playlists asociadas a un perfil
 // GET /playlists/profile/:profileId
-router.get("/playlists/profile/:profileId", authMiddleware, getPlaylists);
+router.get("/playlists/profile/:profileId", authMiddleware, roleMiddleware(["main", "restricted"]), getPlaylists);
 
 // Ruta para actualizar una playlist existente
 // PATCH /playlists/:playlistId
-router.patch("/playlists/:playlistId", authMiddleware, updatePlaylist);
+router.patch("/playlists/:playlistId", authMiddleware, roleMiddleware(["main"]), updatePlaylist);
 
 // Ruta para eliminar una playlist
 // DELETE /playlists/:playlistId
-router.delete("/playlists/:playlistId", authMiddleware, deletePlaylist);
+router.delete("/playlists/:playlistId", authMiddleware, roleMiddleware(["main"]), deletePlaylist);
 
 // Ruta para obtener una playlist por su ID
 // GET /playlists/:playlistId
-router.get("/playlists/:playlistId", authMiddleware, getPlaylistById);
+router.get("/playlists/:playlistId", authMiddleware, roleMiddleware(["main", "restricted"]), getPlaylistById);
 
 // Ruta para obtener todas las playlists asociadas a un usuario
 // GET /playlists/user/:userId
-router.get("/playlists/user/:userId", authMiddleware, getPlaylistsByUser);
+router.get("/playlists/user/:userId", authMiddleware, roleMiddleware(["main"]), getPlaylistsByUser);
 
 // Exporta el router para que pueda ser utilizado en el servidor principal
 export default router;

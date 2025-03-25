@@ -9,12 +9,14 @@ import Profile from '../models/profileModel.js';
  */
 export const createPlaylist = async (req, res) => {
     const { name, profiles } = req.body;
+    console.log("Datos recibidos en el backend:", req.body);
 
     try {
         const playlist = new Playlist({ name, profiles });
         await playlist.save();
         res.status(201).json(playlist);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al crear la playlist' });
     }
 };
@@ -30,6 +32,7 @@ export const getPlaylists = async (req, res) => {
         const playlists = await Playlist.find({ profiles: req.params.profileId });
         res.status(200).json(playlists);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al obtener las playlists' });
     }
 };
@@ -56,6 +59,7 @@ export const updatePlaylist = async (req, res) => {
 
         res.status(200).json(playlist);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al actualizar la playlist' });
     }
 };
@@ -76,6 +80,7 @@ export const deletePlaylist = async (req, res) => {
 
         res.status(200).json({ message: 'Playlist eliminada' });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al eliminar la playlist' });
     }
 };
@@ -94,6 +99,7 @@ export const getPlaylistById = async (req, res) => {
         }
         res.status(200).json(playlist);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al obtener la playlist' });
     }
 };
@@ -111,6 +117,7 @@ export const getPlaylistsByUser = async (req, res) => {
 
         res.status(200).json(playlists);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Error al obtener las playlists del usuario' });
     }
 };

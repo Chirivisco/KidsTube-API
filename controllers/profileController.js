@@ -2,6 +2,9 @@ import Profile from "../models/profileModel.js";
 import User from "../models/userModel.js";
 import multer from "multer";
 import path from "path";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -141,5 +144,37 @@ export const getProfileById = async (req, res) => {
     res.status(200).json(profile);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener el perfil" });
+  }
+};
+
+export const selectProfile = async (req, res) => {
+  const { profileId } = req.body;
+  const userId = req.user.id; // Extraído del token del usuario autenticado
+
+  try {
+    const profile = await Profile.findById(profileId);
+    if (!profile || profile.user.toString() !== userId) {
+      return res.status(404).json({ error: "Perfil no encontrado o no autorizado" });
+    }
+
+    // Generar el segundo token con el rol del perfil
+    const token_profile = jwt.sign(
+      {
+        id: req.user.id,
+        email: req.user.email,
+        profileId: profile._id,
+        role: profile.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: Date.now() + 60 * 1000 } // Expira en 1 minuto
+    );
+
+    res.json({
+      message: "Perfil seleccionado",
+      token_profile,  // Cambié 'token' por 'token_profile' para que sea consistente
+      profile: { id: profile._id, fullName: profile.fullName, role: profile.role },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Error al seleccionar el perfil" });
   }
 };
