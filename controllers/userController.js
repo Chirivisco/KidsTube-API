@@ -141,14 +141,11 @@ const userLogin = async (req, res) => {
   try {
     // valida existencia del email.
     const emailExists = await User.findOne({ email });
-    if (!emailExists) {
-      return res.status(401).json({ error: "User not found" });
-    }
 
     // valida la contraseña.
     const passwordExists = await bcrypt.compare(password, emailExists.password);
-    if (!passwordExists) {
-      return res.status(401).json({ error: "Incorrect password" });
+    if (!passwordExists  || !emailExists) {
+      return res.status(401).json({ error: "Incorrect user or password" });
     }
 
     // token jwt
