@@ -19,6 +19,8 @@
   "homepage": "https://github.com/Chirivisco/KidsTube-API#readme",
   "description": "",
   "dependencies": {
+    "@getbrevo/brevo": "^2.2.0",
+    "axios": "^1.8.4",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

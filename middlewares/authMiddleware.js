@@ -26,11 +26,6 @@ const authMiddleware = (req, res, next) => {
         // Valida el token usando la clave secreta definida en las variables de entorno
         const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Verifica si el token ha expirado
-        if (Date.now() > payload.exp) {
-            return res.status(401).send({ error: "Token expired" });
-        }
-
         // Si el token es válido, agrega los datos del usuario al objeto `req`
         req.user = payload;
 

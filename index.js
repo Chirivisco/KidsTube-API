@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import cors from "cors";
 import bodyParser from "body-parser";
 import dbConfig from "./config/dbConfig.js";
@@ -8,6 +9,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import playlistRoutes from './routes/playlistRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
+import dotenv from 'dotenv';
+
+// Cargar variables de entorno
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// Verificar variables de entorno
+console.log('Verificando variables de entorno:', {
+  BREVO_API_KEY: process.env.BREVO_API_KEY ? 'Definida' : 'No definida',
+  JWT_SECRET: process.env.JWT_SECRET ? 'Definida' : 'No definida'
+});
 
 // Definir __dirname manualmente
 const __filename = fileURLToPath(import.meta.url);

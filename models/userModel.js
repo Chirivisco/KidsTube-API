@@ -10,6 +10,9 @@ const userSchema = new Schema({
   name: { type: String, required: true },
   birthdate: { type: Date, required: true },
   profiles: [{ type: mongoose.Schema.Types.ObjectId, ref: "Profile" }], // Nueva referencia a perfiles
+  isVerified: { type: Boolean, default: false },
+  verificationToken: { type: String },
+  verificationTokenExpires: { type: Date }
 }, { timestamps: true });
 
 export default mongoose.model("User", userSchema, "Usuarios");

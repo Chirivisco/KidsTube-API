@@ -1,9 +1,17 @@
 import User from "../models/userModel.js";
 import Profile from "../models/profileModel.js";
+import PendingUser from "../models/pendingUserModel.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import 'dotenv/config';
 import path from 'path';
+import { sendVerificationEmail } from '../services/emailService.js';
+
+// Agregar logs de depuración
+console.log('Variables de entorno cargadas:', {
+  BREVO_API_KEY: process.env.BREVO_API_KEY ? 'Definida' : 'No definida',
+  JWT_SECRET: process.env.JWT_SECRET ? 'Definida' : 'No definida'
+});
 
 /**
  * Creates a user
@@ -13,46 +21,68 @@ import path from 'path';
  */
 const userCreate = async (req, res) => {
   try {
-    const hashedPassword = await bcrypt.hash(req.body.password, 10);
-
-    let user = new User({
-      email: req.body.email,
-      password: hashedPassword,
-      phone: req.body.phone,
-      pin: req.body.pin,
-      name: req.body.name,
-      birthdate: req.body.birthdate,
-    });
-
-    // comprueba la mayoría de edad del usuario
-    const birthDate = new Date(user.birthdate);
-    const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
-
-    if (age < 18) {
-      return res.status(400).json({ error: "User must be at least 18 years old" });
+    // Validar campos requeridos
+    const { email, password, phone, pin, name, birthdate } = req.body;
+    if (!email || !password || !phone || !pin || !name || !birthdate) {
+      return res.status(400).json({ error: "Todos los campos son requeridos" });
     }
 
-    // guarda el usuario
-    await user.save();
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Formato de email inválido" });
+    }
 
-    // crea el perfil main para el nuevo usuario
-    const mainProfile = new Profile({
-      fullName: user.name,
-      pin: user.pin,
-      avatar: path.join('Images', 'default-avatar.jpg'), // avatar predeterminado
-      user: user._id,
-      role: "main",
+    // Verificar si el email ya existe en usuarios o usuarios pendientes
+    const existingUser = await User.findOne({ email });
+    const existingPendingUser = await PendingUser.findOne({ email });
+    
+    if (existingUser || existingPendingUser) {
+      return res.status(400).json({ error: "El email ya está registrado" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generar token de verificación
+    const verificationToken = jwt.sign(
+      { email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Crear usuario pendiente
+    const pendingUser = new PendingUser({
+      email,
+      password: hashedPassword,
+      phone,
+      pin,
+      name,
+      birthdate,
+      verificationToken
     });
 
-    await mainProfile.save();
+    await pendingUser.save();
 
-    user.profiles.push(mainProfile._id);
-    await user.save();
+    // Enviar email de verificación
+    const emailResult = await sendVerificationEmail(email, verificationToken);
+    if (!emailResult.success) {
+      console.error('Error enviando email de verificación:', emailResult.error);
+      return res.status(500).json({ 
+        error: "Error al enviar el email de verificación", 
+        details: emailResult.error 
+      });
+    }
 
-    res.status(201).json(user);
+    res.status(201).json({
+      message: "Por favor verifica tu email para completar el registro.",
+      email: email
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error al crear el usuario" });
+    console.error('Error creando usuario pendiente:', error);
+    res.status(500).json({ 
+      error: "Error al crear el usuario", 
+      details: error.message
+    });
   }
 };
 
@@ -140,35 +170,103 @@ const userLogin = async (req, res) => {
   const { email, password } = req.body;
   try {
     // valida existencia del email.
-    const emailExists = await User.findOne({ email });
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ error: "Usuario no encontrado" });
+    }
+
+    // Verificar si el usuario está verificado
+    if (!user.isVerified) {
+      return res.status(401).json({ 
+        error: "Cuenta no verificada", 
+        message: "Por favor verifica tu correo electrónico antes de iniciar sesión" 
+      });
+    }
 
     // valida la contraseña.
-    const passwordExists = await bcrypt.compare(password, emailExists.password);
-    if (!passwordExists  || !emailExists) {
-      return res.status(401).json({ error: "Incorrect user or password" });
+    const passwordExists = await bcrypt.compare(password, user.password);
+    if (!passwordExists) {
+      return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
     // token jwt
     const token = jwt.sign(
       {
-        id: emailExists._id,
-        email: emailExists.email
+        id: user._id,
+        email: user.email
       },
-      process.env.JWT_SECRET, //llave secreta 
+      process.env.JWT_SECRET,
       {
-        expiresIn: Date.now() + 60 * 1000 //expira en 1 minuto
-      });
+        expiresIn: '24h' // Esto significa 24 horas, no 24 horas desde ahora
+      }
+    );
 
     res.json({
-      message: "Loged in",
+      message: "Inicio de sesión exitoso",
       token,
-      user: { id: emailExists._id, name: emailExists.name, email: emailExists.email },
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        email: user.email 
+      },
     });
 
-
   } catch (e) {
-    res.status(422).json({"error":e.message});
+    res.status(422).json({"error": e.message});
   }
-}
+};
 
-export { userCreate, userGet, userUpdate, userDelete, userLogin };
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    
+    // Verificar el token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Buscar usuario pendiente por email
+    const pendingUser = await PendingUser.findOne({ email: decoded.email });
+    
+    if (!pendingUser) {
+      return res.redirect('http://localhost:3000/verify-email?error=user_not_found');
+    }
+
+    // Crear el usuario real
+    const user = new User({
+      email: pendingUser.email,
+      password: pendingUser.password,
+      phone: pendingUser.phone,
+      pin: pendingUser.pin,
+      name: pendingUser.name,
+      birthdate: pendingUser.birthdate,
+      isVerified: true
+    });
+
+    await user.save();
+
+    // Crear perfil principal
+    const mainProfile = new Profile({
+      fullName: pendingUser.name,
+      pin: pendingUser.pin,
+      avatar: path.join('Images', 'default-avatar.jpg'),
+      user: user._id,
+      role: "main",
+    });
+
+    await mainProfile.save();
+
+    user.profiles.push(mainProfile._id);
+    await user.save();
+
+    // Eliminar usuario pendiente
+    await PendingUser.deleteOne({ email: decoded.email });
+    
+    // Redirigir al frontend con un mensaje de éxito
+    res.redirect('http://localhost:3000/verify-email?success=true');
+  } catch (error) {
+    console.error('Error en verificación de email:', error);
+    res.redirect('http://localhost:3000/verify-email?error=invalid_token');
+  }
+};
+
+export { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail };

@@ -1,6 +1,6 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
-import { userCreate, userGet, userUpdate, userDelete, userLogin } from "../controllers/userController.js";
+import { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail } from "../controllers/userController.js";
 
 const router = express.Router();
 
@@ -18,5 +18,8 @@ router.delete("/:id", userDelete);
 
 // Autenticación
 router.post("/login", userLogin);
+
+// Verificación de email
+router.get("/verify-email", verifyEmail);
 
 export default router; 
