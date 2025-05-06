@@ -18,10 +18,24 @@ const storage = multer.diskStorage({
 export const upload = multer({ storage: storage });
 
 /**
- * Crea un nuevo perfil
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Controlador de perfiles
+ * Maneja todas las operaciones relacionadas con perfiles de usuario:
+ * - Creación de perfiles
+ * - Obtención de perfiles
+ * - Actualización de perfiles
+ * - Eliminación de perfiles
+ * - Selección de perfiles
+ */
+
+/**
+ * Crea un nuevo perfil para un usuario
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos del perfil
+ * @param {string} req.body.fullName - Nombre completo del perfil
+ * @param {string} req.body.pin - PIN de acceso
+ * @param {string} req.body.avatar - URL del avatar
+ * @param {Object} res - Response object
+ * @returns {Object} Perfil creado
  */
 export const createProfile = async (req, res) => {
   const { fullName, pin, userId, avatar } = req.body;
@@ -59,10 +73,12 @@ export const createProfile = async (req, res) => {
 };
 
 /**
- * Obtiene todos los perfiles de un usuario específico
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Obtiene todos los perfiles de un usuario
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.userId - ID del usuario
+ * @param {Object} res - Response object
+ * @returns {Array} Lista de perfiles del usuario
  */
 export const getProfiles = async (req, res) => {
   try {
@@ -74,10 +90,13 @@ export const getProfiles = async (req, res) => {
 };
 
 /**
- * Actualiza un perfil por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Actualiza un perfil existente
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID del perfil
+ * @param {Object} req.body - Datos a actualizar
+ * @param {Object} res - Response object
+ * @returns {Object} Perfil actualizado
  */
 export const updateProfile = async (req, res) => {
   const { fullName, pin, avatar } = req.body;
@@ -106,10 +125,12 @@ export const updateProfile = async (req, res) => {
 }
 
 /**
- * Elimina un perfil por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Elimina un perfil
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID del perfil
+ * @param {Object} res - Response object
+ * @returns {Object} Mensaje de éxito
  */
 export const deleteProfile = async (req, res) => {
   try {
@@ -147,6 +168,14 @@ export const getProfileById = async (req, res) => {
   }
 };
 
+/**
+ * Selecciona un perfil para el usuario actual
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos de selección
+ * @param {string} req.body.profileId - ID del perfil a seleccionar
+ * @param {Object} res - Response object
+ * @returns {Object} Token de perfil
+ */
 export const selectProfile = async (req, res) => {
   const { profileId } = req.body;
   const userId = req.user.id; // Extraído del token del usuario autenticado

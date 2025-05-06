@@ -2,10 +2,23 @@ import Playlist from '../models/playlistModel.js';
 import Profile from '../models/profileModel.js';
 
 /**
+ * Controlador de playlists
+ * Maneja todas las operaciones relacionadas con playlists:
+ * - Creación de playlists
+ * - Obtención de playlists
+ * - Actualización de playlists
+ * - Eliminación de playlists
+ * - Gestión de videos en playlists
+ */
+
+/**
  * Crea una nueva playlist
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos de la playlist
+ * @param {string} req.body.name - Nombre de la playlist
+ * @param {Array<string>} req.body.profiles - IDs de los perfiles asociados
+ * @param {Object} res - Response object
+ * @returns {Object} Playlist creada
  */
 export const createPlaylist = async (req, res) => {
     const { name, profiles } = req.body;
@@ -22,10 +35,12 @@ export const createPlaylist = async (req, res) => {
 };
 
 /**
- * Obtiene todas las playlists de un perfil específico
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Obtiene todas las playlists de un perfil
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.profileId - ID del perfil
+ * @param {Object} res - Response object
+ * @returns {Array} Lista de playlists del perfil
  */
 export const getPlaylists = async (req, res) => {
     try {
@@ -38,10 +53,13 @@ export const getPlaylists = async (req, res) => {
 };
 
 /**
- * Actualiza una playlist por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Actualiza una playlist existente
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID de la playlist
+ * @param {Object} req.body - Datos a actualizar
+ * @param {Object} res - Response object
+ * @returns {Object} Playlist actualizada
  */
 export const updatePlaylist = async (req, res) => {
     const { name, profiles } = req.body;
@@ -65,10 +83,12 @@ export const updatePlaylist = async (req, res) => {
 };
 
 /**
- * Elimina una playlist por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Elimina una playlist
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID de la playlist
+ * @param {Object} res - Response object
+ * @returns {Object} Mensaje de éxito
  */
 export const deletePlaylist = async (req, res) => {
     try {
@@ -104,6 +124,14 @@ export const getPlaylistById = async (req, res) => {
     }
 };
 
+/**
+ * Obtiene todas las playlists de un usuario
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.userId - ID del usuario
+ * @param {Object} res - Response object
+ * @returns {Array} Lista de playlists del usuario
+ */
 export const getPlaylistsByUser = async (req, res) => {
     try {
         // Obtener todos los perfiles del usuario

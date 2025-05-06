@@ -2,10 +2,26 @@ import Video from '../models/videoModel.js';
 import Playlist from '../models/playlistModel.js';
 
 /**
+ * Controlador de videos
+ * Maneja todas las operaciones relacionadas con videos:
+ * - Creación de videos
+ * - Obtención de videos
+ * - Actualización de videos
+ * - Eliminación de videos
+ * - Asociación de videos a playlists
+ */
+
+/**
  * Crea un nuevo video en una playlist
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.playlistId - ID de la playlist
+ * @param {Object} req.body - Datos del video
+ * @param {string} req.body.name - Nombre del video
+ * @param {string} req.body.url - URL del video
+ * @param {string} req.body.description - Descripción del video
+ * @param {Object} res - Response object
+ * @returns {Object} Video creado
  */
 export const createVideo = async (req, res) => {
     const { name, url, description } = req.body;
@@ -45,10 +61,13 @@ export const getVideos = async (req, res) => {
 };
 
 /**
- * Actualiza un video por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Actualiza un video existente
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID del video
+ * @param {Object} req.body - Datos a actualizar
+ * @param {Object} res - Response object
+ * @returns {Object} Video actualizado
  */
 export const updateVideo = async (req, res) => {
     const { name, url, description } = req.body;
@@ -71,10 +90,12 @@ export const updateVideo = async (req, res) => {
 };
 
 /**
- * Elimina un video por ID
- *
- * @param {*} req - La solicitud HTTP
- * @param {*} res - La respuesta HTTP
+ * Elimina un video
+ * @param {Object} req - Request object
+ * @param {Object} req.params - Parámetros de la URL
+ * @param {string} req.params.id - ID del video
+ * @param {Object} res - Response object
+ * @returns {Object} Mensaje de éxito
  */
 export const deleteVideo = async (req, res) => {
     try {

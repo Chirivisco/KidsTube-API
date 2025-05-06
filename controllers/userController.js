@@ -8,6 +8,12 @@ import path from 'path';
 import { sendVerificationEmail } from '../services/emailService.js';
 import { generateVerificationCode, sendVerificationSMS } from '../services/smsService.js';
 import { OAuth2Client } from 'google-auth-library';
+import fs from 'fs';
+import https from 'https';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Cliente de OAuth2 para verificar tokens de Google
@@ -22,10 +28,27 @@ console.log('Variables de entorno cargadas:', {
 });
 
 /**
- * Creates a user
- *
- * @param {*} req
- * @param {*} res
+ * Controlador de usuarios
+ * Maneja todas las operaciones relacionadas con usuarios:
+ * - Registro
+ * - Autenticación
+ * - Verificación de email
+ * - Autenticación con Google
+ * - Gestión de perfiles
+ */
+
+/**
+ * Registra un nuevo usuario en el sistema
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos del usuario
+ * @param {string} req.body.email - Email del usuario
+ * @param {string} req.body.password - Contraseña del usuario
+ * @param {string} req.body.name - Nombre del usuario
+ * @param {string} req.body.phone - Teléfono del usuario
+ * @param {string} req.body.country - País del usuario
+ * @param {string} req.body.birthdate - Fecha de nacimiento
+ * @param {Object} res - Response object
+ * @returns {Object} Usuario creado y token JWT
  */
 const userCreate = async (req, res) => {
   try {
@@ -174,6 +197,15 @@ const userDelete = (req, res) => {
     });
 };
 
+/**
+ * Autentica un usuario existente
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Credenciales del usuario
+ * @param {string} req.body.email - Email del usuario
+ * @param {string} req.body.password - Contraseña del usuario
+ * @param {Object} res - Response object
+ * @returns {Object} Token JWT y datos del usuario
+ */
 const userLogin = async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -304,6 +336,14 @@ const verifySmsCode = async (req, res) => {
   }
 };
 
+/**
+ * Verifica el email de un usuario
+ * @param {Object} req - Request object
+ * @param {Object} req.query - Parámetros de la query
+ * @param {string} req.query.token - Token de verificación
+ * @param {Object} res - Response object
+ * @returns {Object} Mensaje de éxito o error
+ */
 const verifyEmail = async (req, res) => {
   try {
     console.log('REST API - Verificación de email iniciada:', {
@@ -382,31 +422,46 @@ const verifyEmail = async (req, res) => {
   }
 };
 
+// Función para descargar imagen de Google
+const downloadGoogleImage = async (imageUrl, userId) => {
+  return new Promise((resolve, reject) => {
+    const imagePath = path.join(__dirname, '..', 'public', 'Images', `google-avatar-${userId}.jpg`);
+    
+    https.get(imageUrl, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Error al descargar la imagen: ${response.statusCode}`));
+        return;
+      }
+
+      const fileStream = fs.createWriteStream(imagePath);
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close();
+        resolve(`/Images/google-avatar-${userId}.jpg`);
+      });
+
+      fileStream.on('error', (err) => {
+        fs.unlink(imagePath, () => reject(err));
+      });
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
+};
+
 /**
- * Controlador para la autenticación con Google OAuth2.0
- * 
- * Este controlador maneja el proceso de autenticación cuando un usuario
- * inicia sesión o se registra usando su cuenta de Google.
- * 
- * Flujo del proceso:
- * 1. Recibe el token de credencial de Google desde el frontend
- * 2. Verifica el token con la API de Google
- * 3. Extrae la información del usuario (email, nombre, ID de Google, foto)
- * 4. Busca si el usuario ya existe en la base de datos
- * 5. Si no existe, crea un nuevo usuario y su perfil principal
- * 6. Genera un token JWT para la sesión
- * 
- * @param {Object} req - Objeto de solicitud HTTP
- * @param {Object} req.body - Cuerpo de la solicitud
+ * Autentica un usuario con Google
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos de autenticación
  * @param {string} req.body.credential - Token de credencial de Google
- * @param {Object} res - Objeto de respuesta HTTP
- * @returns {Object} Respuesta con token JWT y datos del usuario
+ * @param {Object} res - Response object
+ * @returns {Object} Token JWT y datos del usuario
  */
 const googleAuth = async (req, res) => {
   try {
     const { credential } = req.body;
     
-    // Validación del token de credencial
     if (!credential) {
       console.error('No se recibió el credential en la petición');
       return res.status(400).json({ error: "Credential no proporcionado" });
@@ -414,19 +469,16 @@ const googleAuth = async (req, res) => {
 
     console.log('Intentando verificar token de Google con client ID:', process.env.GOOGLE_CLIENT_ID);
     
-    // Verificación del token con Google
     const ticket = await client.verifyIdToken({
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID
     });
 
-    // Extracción de datos del usuario de Google
     const payload = ticket.getPayload();
     console.log('Payload de Google recibido:', payload);
     
     const { email, name, sub: googleId, picture } = payload;
 
-    // Búsqueda de usuario existente por email o ID de Google
     let user = await User.findOne({ 
       $or: [
         { email },
@@ -436,37 +488,53 @@ const googleAuth = async (req, res) => {
 
     if (!user) {
       console.log('Creando nuevo usuario de Google');
-      // Creación de nuevo usuario
+      
+      // Generar PIN aleatorio de 6 dígitos
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Fecha de nacimiento por defecto (18 años atrás)
+      const defaultBirthdate = new Date();
+      defaultBirthdate.setFullYear(defaultBirthdate.getFullYear() - 18);
+
       user = new User({
         email,
         name,
         googleId,
         authProvider: 'google',
-        isVerified: true, // Los usuarios de Google ya están verificados
-        profiles: [] // Inicialización del array de perfiles
+        isVerified: true,
+        pin,
+        birthdate: defaultBirthdate,
+        profiles: []
       });
 
       await user.save();
 
-      // Creación del perfil principal
+      // Descargar y guardar la imagen de perfil de Google
+      let avatarPath = path.join('Images', 'default-avatar.jpg');
+      if (picture) {
+        try {
+          avatarPath = await downloadGoogleImage(picture, user._id);
+        } catch (error) {
+          console.error('Error al descargar la imagen de Google:', error);
+        }
+      }
+
       const mainProfile = new Profile({
         fullName: name,
-        avatar: picture || path.join('Images', 'default-avatar.jpg'),
+        avatar: avatarPath,
         user: user._id,
         role: "main",
-        pin: "000000" // PIN por defecto para usuarios de Google
+        pin: pin
       });
 
       const savedProfile = await mainProfile.save();
       
-      // Asociación del perfil con el usuario
       user.profiles.push(savedProfile._id);
       await user.save();
 
       console.log('Perfil principal creado:', savedProfile);
     }
 
-    // Generación del token JWT para la sesión
     const token = jwt.sign(
       {
         id: user._id,
@@ -478,20 +546,25 @@ const googleAuth = async (req, res) => {
       }
     );
 
-    // Respuesta exitosa con token y datos del usuario
-    res.json({
+    // Crear objeto de respuesta con el token incluido
+    const responseData = {
       message: "Inicio de sesión con Google exitoso",
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        profiles: user.profiles // Inclusión de los perfiles en la respuesta
+        pin: user.pin,
+        birthdate: user.birthdate,
+        profiles: user.profiles,
+        token
       }
-    });
+    };
+
+    console.log('Respuesta de autenticación:', responseData);
+    res.json(responseData);
 
   } catch (error) {
-    // Manejo detallado de errores
     console.error('Error detallado en autenticación de Google:', {
       message: error.message,
       stack: error.stack,
@@ -504,6 +577,22 @@ const googleAuth = async (req, res) => {
   }
 };
 
+/**
+ * Reenvía el código de verificación SMS a un usuario
+ * Esta función se utiliza cuando el usuario no recibió el código SMS inicial o cuando el código expiró.
+ * El proceso incluye:
+ * 1. Verificación del token temporal
+ * 2. Generación de un nuevo código de verificación
+ * 3. Envío del código por SMS
+ * 4. Actualización del usuario con el nuevo código y tiempo de expiración
+ * 
+ * @param {Object} req - Request object
+ * @param {Object} req.body - Datos de la solicitud
+ * @param {string} req.body.tempToken - Token temporal del usuario
+ * @param {Object} res - Response object
+ * @returns {Object} Mensaje de éxito o error
+ * @throws {Error} Si el token es inválido o el usuario no existe
+ */
 const resendSmsCode = async (req, res) => {
     try {
         const { tempToken } = req.body;
