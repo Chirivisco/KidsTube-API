@@ -250,33 +250,25 @@ const userLogin = async (req, res) => {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
-    // Generar código de verificación SMS solo para usuarios locales
-    const verificationCode = generateVerificationCode();
-    const verificationExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-    user.smsVerificationCode = verificationCode;
-    user.smsVerificationExpires = verificationExpires;
-    await user.save();
-
-    const smsResult = await sendVerificationSMS(user.phone, verificationCode);
-    if (!smsResult.success) {
-      return res.status(500).json({ error: "Error al enviar el código de verificación" });
-    }
-
-    const tempToken = jwt.sign(
+    // Generar token JWT directamente sin verificación SMS
+    const token = jwt.sign(
       {
         id: user._id,
-        email: user.email,
-        needsSmsVerification: true
+        email: user.email
       },
       process.env.JWT_SECRET,
-      { expiresIn: '10m' }
+      { expiresIn: '24h' }
     );
 
     res.json({
-      message: "Código de verificación enviado",
-      tempToken,
-      needsSmsVerification: true
+      message: "Inicio de sesión exitoso",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profiles: user.profiles
+      }
     });
 
   } catch (e) {
