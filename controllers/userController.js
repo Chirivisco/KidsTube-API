@@ -6,8 +6,13 @@ import jwt from "jsonwebtoken";
 import 'dotenv/config';
 import path from 'path';
 import { sendVerificationEmail } from '../services/emailService.js';
+import { generateVerificationCode, sendVerificationSMS } from '../services/smsService.js';
 import { OAuth2Client } from 'google-auth-library';
 
+/**
+ * Cliente de OAuth2 para verificar tokens de Google
+ * Se inicializa con el ID de cliente de Google desde las variables de entorno
+ */
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Agregar logs de depuración
@@ -172,14 +177,12 @@ const userDelete = (req, res) => {
 const userLogin = async (req, res) => {
   const { email, password } = req.body;
   try {
-    // valida existencia del email.
     const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({ error: "Usuario no encontrado" });
     }
 
-    // Verificar si el usuario está verificado
     if (!user.isVerified) {
       return res.status(401).json({ 
         error: "Cuenta no verificada", 
@@ -187,36 +190,117 @@ const userLogin = async (req, res) => {
       });
     }
 
-    // valida la contraseña.
+    // Si el usuario se autenticó con Google, no requiere verificación SMS
+    if (user.authProvider === 'google') {
+      const token = jwt.sign(
+        {
+          id: user._id,
+          email: user.email
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        message: "Inicio de sesión exitoso",
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          profiles: user.profiles
+        }
+      });
+    }
+
     const passwordExists = await bcrypt.compare(password, user.password);
     if (!passwordExists) {
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
 
-    // token jwt
+    // Generar código de verificación SMS solo para usuarios locales
+    const verificationCode = generateVerificationCode();
+    const verificationExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    user.smsVerificationCode = verificationCode;
+    user.smsVerificationExpires = verificationExpires;
+    await user.save();
+
+    const smsResult = await sendVerificationSMS(user.phone, verificationCode);
+    if (!smsResult.success) {
+      return res.status(500).json({ error: "Error al enviar el código de verificación" });
+    }
+
+    const tempToken = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        needsSmsVerification: true
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '10m' }
+    );
+
+    res.json({
+      message: "Código de verificación enviado",
+      tempToken,
+      needsSmsVerification: true
+    });
+
+  } catch (e) {
+    res.status(422).json({"error": e.message});
+  }
+};
+
+const verifySmsCode = async (req, res) => {
+  try {
+    const { code } = req.body;
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    if (!user.smsVerificationCode || !user.smsVerificationExpires) {
+      return res.status(400).json({ error: "No hay código de verificación pendiente" });
+    }
+
+    if (new Date() > user.smsVerificationExpires) {
+      return res.status(400).json({ error: "Código de verificación expirado" });
+    }
+
+    if (code !== user.smsVerificationCode) {
+      return res.status(400).json({ error: "Código de verificación incorrecto" });
+    }
+
+    // Limpiar código de verificación
+    user.smsVerificationCode = undefined;
+    user.smsVerificationExpires = undefined;
+    await user.save();
+
+    // Generar token final
     const token = jwt.sign(
       {
         id: user._id,
         email: user.email
       },
       process.env.JWT_SECRET,
-      {
-        expiresIn: '24h' // Esto significa 24 horas, no 24 horas desde ahora
-      }
+      { expiresIn: '24h' }
     );
 
     res.json({
-      message: "Inicio de sesión exitoso",
+      message: "Verificación exitosa",
       token,
-      user: { 
-        id: user._id, 
-        name: user.name, 
-        email: user.email 
-      },
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      }
     });
 
-  } catch (e) {
-    res.status(422).json({"error": e.message});
+  } catch (error) {
+    res.status(500).json({ error: "Error en la verificación" });
   }
 };
 
@@ -298,10 +382,31 @@ const verifyEmail = async (req, res) => {
   }
 };
 
+/**
+ * Controlador para la autenticación con Google OAuth2.0
+ * 
+ * Este controlador maneja el proceso de autenticación cuando un usuario
+ * inicia sesión o se registra usando su cuenta de Google.
+ * 
+ * Flujo del proceso:
+ * 1. Recibe el token de credencial de Google desde el frontend
+ * 2. Verifica el token con la API de Google
+ * 3. Extrae la información del usuario (email, nombre, ID de Google, foto)
+ * 4. Busca si el usuario ya existe en la base de datos
+ * 5. Si no existe, crea un nuevo usuario y su perfil principal
+ * 6. Genera un token JWT para la sesión
+ * 
+ * @param {Object} req - Objeto de solicitud HTTP
+ * @param {Object} req.body - Cuerpo de la solicitud
+ * @param {string} req.body.credential - Token de credencial de Google
+ * @param {Object} res - Objeto de respuesta HTTP
+ * @returns {Object} Respuesta con token JWT y datos del usuario
+ */
 const googleAuth = async (req, res) => {
   try {
     const { credential } = req.body;
     
+    // Validación del token de credencial
     if (!credential) {
       console.error('No se recibió el credential en la petición');
       return res.status(400).json({ error: "Credential no proporcionado" });
@@ -309,18 +414,19 @@ const googleAuth = async (req, res) => {
 
     console.log('Intentando verificar token de Google con client ID:', process.env.GOOGLE_CLIENT_ID);
     
-    // Verificar el token de Google
+    // Verificación del token con Google
     const ticket = await client.verifyIdToken({
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID
     });
 
+    // Extracción de datos del usuario de Google
     const payload = ticket.getPayload();
     console.log('Payload de Google recibido:', payload);
     
     const { email, name, sub: googleId, picture } = payload;
 
-    // Buscar usuario existente
+    // Búsqueda de usuario existente por email o ID de Google
     let user = await User.findOne({ 
       $or: [
         { email },
@@ -330,19 +436,19 @@ const googleAuth = async (req, res) => {
 
     if (!user) {
       console.log('Creando nuevo usuario de Google');
-      // Crear nuevo usuario
+      // Creación de nuevo usuario
       user = new User({
         email,
         name,
         googleId,
         authProvider: 'google',
-        isVerified: true,
-        profiles: [] // Inicializar el array de perfiles
+        isVerified: true, // Los usuarios de Google ya están verificados
+        profiles: [] // Inicialización del array de perfiles
       });
 
       await user.save();
 
-      // Crear perfil principal
+      // Creación del perfil principal
       const mainProfile = new Profile({
         fullName: name,
         avatar: picture || path.join('Images', 'default-avatar.jpg'),
@@ -353,14 +459,14 @@ const googleAuth = async (req, res) => {
 
       const savedProfile = await mainProfile.save();
       
-      // Actualizar el usuario con el perfil
+      // Asociación del perfil con el usuario
       user.profiles.push(savedProfile._id);
       await user.save();
 
       console.log('Perfil principal creado:', savedProfile);
     }
 
-    // Generar token JWT
+    // Generación del token JWT para la sesión
     const token = jwt.sign(
       {
         id: user._id,
@@ -372,6 +478,7 @@ const googleAuth = async (req, res) => {
       }
     );
 
+    // Respuesta exitosa con token y datos del usuario
     res.json({
       message: "Inicio de sesión con Google exitoso",
       token,
@@ -379,11 +486,12 @@ const googleAuth = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        profiles: user.profiles // Incluir los perfiles en la respuesta
+        profiles: user.profiles // Inclusión de los perfiles en la respuesta
       }
     });
 
   } catch (error) {
+    // Manejo detallado de errores
     console.error('Error detallado en autenticación de Google:', {
       message: error.message,
       stack: error.stack,
@@ -396,4 +504,35 @@ const googleAuth = async (req, res) => {
   }
 };
 
-export { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail, googleAuth };
+const resendSmsCode = async (req, res) => {
+    try {
+        const { tempToken } = req.body;
+        
+        if (!tempToken) {
+            return res.status(400).json({ error: 'Token temporal requerido' });
+        }
+
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const verificationCode = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        await sendVerificationSMS(user.phone, verificationCode);
+
+        user.smsVerificationCode = verificationCode;
+        user.smsVerificationExpires = expiresAt;
+        await user.save();
+
+        res.json({ message: 'Código reenviado exitosamente' });
+    } catch (error) {
+        console.error('Error al reenviar código SMS:', error);
+        res.status(500).json({ error: 'Error al reenviar el código de verificación' });
+    }
+};
+
+export { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail, googleAuth, verifySmsCode, resendSmsCode };

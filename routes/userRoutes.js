@@ -1,6 +1,6 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
-import { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail, googleAuth } from "../controllers/userController.js";
+import { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail, googleAuth, verifySmsCode, resendSmsCode } from "../controllers/userController.js";
 
 const router = express.Router();
 
@@ -24,5 +24,9 @@ router.post("/google-auth", googleAuth);
 
 // Verificación de email
 router.get("/verify-email", verifyEmail);
+
+// Verificación de código SMS
+router.post('/verify-sms', verifySmsCode);
+router.post('/resend-sms', resendSmsCode);
 
 export default router; 
