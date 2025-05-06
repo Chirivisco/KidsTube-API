@@ -6,6 +6,9 @@ import jwt from "jsonwebtoken";
 import 'dotenv/config';
 import path from 'path';
 import { sendVerificationEmail } from '../services/emailService.js';
+import { OAuth2Client } from 'google-auth-library';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Agregar logs de depuración
 console.log('Variables de entorno cargadas:', {
@@ -295,4 +298,102 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-export { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail };
+const googleAuth = async (req, res) => {
+  try {
+    const { credential } = req.body;
+    
+    if (!credential) {
+      console.error('No se recibió el credential en la petición');
+      return res.status(400).json({ error: "Credential no proporcionado" });
+    }
+
+    console.log('Intentando verificar token de Google con client ID:', process.env.GOOGLE_CLIENT_ID);
+    
+    // Verificar el token de Google
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    console.log('Payload de Google recibido:', payload);
+    
+    const { email, name, sub: googleId, picture } = payload;
+
+    // Buscar usuario existente
+    let user = await User.findOne({ 
+      $or: [
+        { email },
+        { googleId }
+      ]
+    });
+
+    if (!user) {
+      console.log('Creando nuevo usuario de Google');
+      // Crear nuevo usuario
+      user = new User({
+        email,
+        name,
+        googleId,
+        authProvider: 'google',
+        isVerified: true,
+        profiles: [] // Inicializar el array de perfiles
+      });
+
+      await user.save();
+
+      // Crear perfil principal
+      const mainProfile = new Profile({
+        fullName: name,
+        avatar: picture || path.join('Images', 'default-avatar.jpg'),
+        user: user._id,
+        role: "main",
+        pin: "000000" // PIN por defecto para usuarios de Google
+      });
+
+      const savedProfile = await mainProfile.save();
+      
+      // Actualizar el usuario con el perfil
+      user.profiles.push(savedProfile._id);
+      await user.save();
+
+      console.log('Perfil principal creado:', savedProfile);
+    }
+
+    // Generar token JWT
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '24h'
+      }
+    );
+
+    res.json({
+      message: "Inicio de sesión con Google exitoso",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profiles: user.profiles // Incluir los perfiles en la respuesta
+      }
+    });
+
+  } catch (error) {
+    console.error('Error detallado en autenticación de Google:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    res.status(500).json({ 
+      error: "Error en la autenticación de Google",
+      details: error.message 
+    });
+  }
+};
+
+export { userCreate, userGet, userUpdate, userDelete, userLogin, verifyEmail, googleAuth };
