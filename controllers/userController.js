@@ -219,16 +219,33 @@ const userLogin = async (req, res) => {
 
 const verifyEmail = async (req, res) => {
   try {
-    const { token } = req.query;
+    console.log('REST API - Verificación de email iniciada:', {
+      originalUrl: req.originalUrl,
+      query: req.query,
+      params: req.params,
+      headers: req.headers
+    });
+
+    const token = req.query.token;
     
+    if (!token) {
+      console.log('REST API - Error: Token no proporcionado en la petición');
+      return res.status(400).json({ error: "Token no proporcionado" });
+    }
+
+    console.log('REST API - Token recibido:', token);
+
     // Verificar el token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('REST API - Token decodificado:', decoded);
     
     // Buscar usuario pendiente por email
     const pendingUser = await PendingUser.findOne({ email: decoded.email });
+    console.log('REST API - Usuario pendiente encontrado:', pendingUser ? 'Sí' : 'No');
     
     if (!pendingUser) {
-      return res.redirect('http://localhost:3000/verify-email?error=user_not_found');
+      console.log('REST API - Error: Usuario pendiente no encontrado');
+      return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
     // Crear el usuario real
@@ -261,11 +278,20 @@ const verifyEmail = async (req, res) => {
     // Eliminar usuario pendiente
     await PendingUser.deleteOne({ email: decoded.email });
     
-    // Redirigir al frontend con un mensaje de éxito
-    res.redirect('http://localhost:3000/verify-email?success=true');
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/verify-email?status=success`);
   } catch (error) {
     console.error('Error en verificación de email:', error);
-    res.redirect('http://localhost:3000/verify-email?error=invalid_token');
+    if (error.name === 'JsonWebTokenError') {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendUrl}/verify-email?status=error&message=Token inválido`);
+    }
+    if (error.name === 'TokenExpiredError') {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendUrl}/verify-email?status=error&message=Token expirado`);
+    }
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/verify-email?status=error&message=Error al verificar el email`);
   }
 };
 

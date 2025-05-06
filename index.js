@@ -26,8 +26,26 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Configuración de middleware
 app.use(bodyParser.json());
-app.use(cors({ domains: "*", methods: "*" }));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cors({ 
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Middleware para logging
+app.use((req, res, next) => {
+  console.log('REST API - Petición recibida:', {
+    method: req.method,
+    url: req.url,
+    query: req.query,
+    params: req.params,
+    body: req.body
+  });
+  next();
+});
 
 // Rutas
 app.use("/users", userRoutes);

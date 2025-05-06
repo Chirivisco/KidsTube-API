@@ -6,7 +6,7 @@ const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 export const sendVerificationEmail = async (email, token) => {
   try {
     console.log('Iniciando envío de correo a:', email);
-    const verificationUrl = `http://localhost:3001/users/verify-email?token=${token}`;
+    const verificationUrl = `http://localhost:3002/users/verify-email?token=${token}`;
     const emailData = {
       sender: {
         name: 'KidsTube',
