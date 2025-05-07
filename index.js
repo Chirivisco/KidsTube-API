@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import playlistRoutes from './routes/playlistRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
+import youtubeRoutes from './routes/youtubeRoutes.js';
 import dotenv from 'dotenv';
 
 // Cargar variables de entorno
@@ -52,6 +53,7 @@ app.use("/users", userRoutes);
 app.use("/profiles", profileRoutes);
 app.use('/api', playlistRoutes);
 app.use('/api', videoRoutes);
+app.use('/api/youtube', youtubeRoutes);
 
 // Middleware para servir archivos estáticos
 app.use('/Images', express.static(path.join(__dirname, 'Images')));
